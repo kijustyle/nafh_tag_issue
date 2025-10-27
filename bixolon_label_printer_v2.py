@@ -21,8 +21,9 @@ import pystray
 from pystray import MenuItem as item
 
 # GUI
-from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QProgressBar
+from PyQt5.QtWidgets import QApplication, QDialog, QVBoxLayout, QLabel, QProgressBar, QPushButton
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
+from PyQt5.QtGui import QCursor
 
 # Windows 프린터
 try:
@@ -491,8 +492,9 @@ class SocketServer:
 class TrayIcon:
     """시스템 트레이 아이콘"""
     
-    def __init__(self, server):
+    def __init__(self, server, app):
         self.server = server
+        self.app = app
         self.icon = None
         
     def create_image(self):
@@ -541,6 +543,9 @@ class TrayIcon:
         print("✓ 프린터 상태: 실행 중")
         print(f"   서버: {self.server.host}:{self.server.port}")
         print(f"   프린터: {self.server.printer.printer_name}")
+        
+        # 시그널 발생
+        self.app.status_signal.emit()
     
     def run(self):
         """트레이 아이콘 실행"""
@@ -559,17 +564,153 @@ class TrayIcon:
         print("📌 시스템 트레이 아이콘 생성됨")
         self.icon.run()
 
+class StatusDialog(QDialog):
+    """상태 확인 다이얼로그 - 글래스모피즘 디자인"""
+    
+    def __init__(self, server_info):
+        super().__init__()
+        self.setWindowTitle("프린터 상태")
+        self.setFixedSize(450, 350)
+        self.setWindowFlags(Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        
+        # 메인 레이아웃
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # 글래스 컨테이너
+        self.glass_container = QLabel()
+        self.glass_container.setFixedSize(450, 350)
+        self.glass_container.setStyleSheet("""
+            QLabel {
+                background: qlineargradient(
+                    x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(0, 0, 0, 0.75),
+                    stop:1 rgba(0, 0, 0, 0.85)
+                );
+                border: 2px solid rgba(242, 98, 29, 0.75);
+                border-radius: 25px;
+            }
+        """)
+        
+        # 컨테이너 내부 레이아웃
+        container_layout = QVBoxLayout(self.glass_container)
+        container_layout.setContentsMargins(30, 30, 30, 30)
+        container_layout.setSpacing(20)
+        
+        # 제목
+        title_label = QLabel("🖨️ 프린터 상태")
+        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 1);
+                font-size: 24px;
+                font-weight: bold;
+                background: transparent;
+                border: none;
+            }
+        """)
+        container_layout.addWidget(title_label)
+        
+        # 구분선
+        line = QLabel()
+        line.setFixedHeight(2)
+        line.setStyleSheet("""
+            QLabel {
+                background: rgba(242, 98, 29, 0.5);
+                border: none;
+            }
+        """)
+        container_layout.addWidget(line)
+        
+        # 상태 정보 부분을 이렇게 수정
+        status_text = f"""
+        <div style='color: rgba(255, 255, 255, 0.98); line-height: 1.3;'>
+            <p style='font-size: 16px; margin: 5px 0;'>
+                <b>🟢 상태:</b> 실행 중
+            </p>
+            <p style='font-size: 16px; margin: 5px 0;'>
+                <b>🌐 서버:</b> {server_info['host']}:{server_info['port']}
+            </p>
+            <p style='font-size: 16px; margin: 5px 0;'>
+                <b>🖨️ 프린터:</b> {server_info['printer']}
+            </p>
+            <p style='font-size: 16px; margin: 5px 0;'>
+                <b>📂 로그:</b> logs/ 폴더
+            </p>
+        </div>
+        """
+        
+        info_label = QLabel(status_text)
+        info_label.setWordWrap(True)  # 자동 줄바꿈
+        info_label.setTextFormat(Qt.RichText)  # ← 이거 추가!
+        info_label.setStyleSheet("""
+            QLabel {
+                background: transparent;
+                border: none;
+                padding: 10px;
+            }
+        """)
+        container_layout.addWidget(info_label)
+        
+        container_layout.addStretch()
+        
+        # 닫기 버튼
+        close_btn = QPushButton("닫기")
+        close_btn.setFixedHeight(45)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(242, 98, 29, 0.2);
+                color: white;
+                border: 2px solid rgba(242, 98, 29, 0.3);
+                border-radius: 10px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: rgba(242, 98, 29, 0.6);
+                border: 2px solid rgba(242, 98, 29, 0.5);
+            }
+            QPushButton:pressed {
+                background: rgba(242, 98, 29, 0.7);
+            }
+        """)
+        close_btn.clicked.connect(self.hide)
+        container_layout.addWidget(close_btn)
+        
+        main_layout.addWidget(self.glass_container)
+        self.setLayout(main_layout)
+        
+        # 화면 중앙에 배치
+        self.center_on_screen()
+        
+    def close_dialog(self):
+        """다이얼로그 닫기"""
+        self.hide()
+        self.deleteLater()
+    
+    def center_on_screen(self):
+        """화면 중앙에 다이얼로그 배치"""
+        screen = QApplication.desktop().screenGeometry()
+        x = (screen.width() - self.width()) // 2
+        y = (screen.height() - self.height()) // 2
+        self.move(x, y)
 
-class Application:
+class Application(QObject):  # ← QObject 추가!
     """메인 애플리케이션"""
     
+    status_signal = pyqtSignal()  # ← 클래스 변수로!
+    
     def __init__(self):
+        super().__init__()  # ← 추가!
+        
         # 설정 파일 로드
         self.config = self.load_config()
         
         # Qt 애플리케이션
         self.app = QApplication(sys.argv)
-        self.app.setQuitOnLastWindowClosed(False)  # 다이얼로그가 닫혀도 종료 안 함
+        self.app.setQuitOnLastWindowClosed(False)
         
         # 컴포넌트 초기화
         printer_name = self.config.get('printer', {}).get('name', 'BIXOLON XD5-40d - BPL-Z')
@@ -582,14 +723,25 @@ class Application:
             printer=self.printer
         )
         
-        self.tray = TrayIcon(self.server)
+        self.tray = TrayIcon(self.server, self)
         self.dialog = None
         
         # 시그널 연결
         self.printer.signals.start_printing.connect(self.show_printing_dialog)
         self.printer.signals.finish_printing.connect(self.hide_printing_dialog)
         self.printer.signals.update_status.connect(self.update_dialog_status)
+        self.status_signal.connect(self._show_status_dialog)  # ← 상태 시그널
     
+    def _show_status_dialog(self):
+        """실제 다이얼로그 표시 (메인 스레드)"""
+        server_info = {
+            'host': self.server.host,
+            'port': self.server.port,
+            'printer': self.server.printer.printer_name
+        }
+        dialog = StatusDialog(server_info)
+        dialog.exec_()
+        
     def load_config(self):
         """설정 파일 로드"""
         try:
