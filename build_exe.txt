@@ -1,0 +1,23 @@
+# PyInstaller를 사용하여 실행 파일 생성
+
+# 1. PyInstaller 설치
+# pip install pyinstaller
+
+# 2. 실행 파일 생성
+# pyinstaller --onefile --windowed --icon=printer.ico bixolon_label_printer.py
+
+# 3. 옵션 설명:
+# --onefile: 단일 실행 파일로 생성
+# --windowed: 콘솔 창 없이 실행 (백그라운드)
+# --icon=printer.ico: 아이콘 설정 (선택사항)
+# --name=BixolonPrinter: 실행 파일 이름 지정
+
+# 상세 버전
+"""
+pyinstaller --onefile ^
+    --windowed ^
+    --name=BixolonLabelPrinter ^
+    --add-data="config.json;." ^
+    --hidden-import=win32timezone ^
+    bixolon_label_printer.py
+"""
